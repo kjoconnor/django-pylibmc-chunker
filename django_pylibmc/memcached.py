@@ -100,7 +100,7 @@ class PyLibMCCache(BaseMemcachedCache):
         try:
             value = super(PyLibMCCache, self).get(key, default, version)
             if (value is not None and
-                value[:29] == '<<<django-pylibmc-chunker>>>-':)
+                value[:29] == '<<<django-pylibmc-chunker>>>-'):
                 keys = ['%s-%s' % (key, x) 
                         for x in range(0, value[29:], MAX_CHUNK_SIZE)]
                 values = self.get_many(keys)
