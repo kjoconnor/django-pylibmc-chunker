@@ -35,7 +35,7 @@ if MIN_COMPRESS > 0 and not pylibmc.support_compression:
     warnings.warn('A minimum compression length was provided but pylibmc was '
                   'not compiled with support for it.')
 
-MAX_CHUNK_SIZE = getattr(settings, 'PYLIBMC_MAX_CHUNK_SIZE', None)
+MAX_CHUNK_SIZE = getattr(settings, 'PYLIBMC_MAX_CHUNK_SIZE', 1024 * 1024 * 1024 * 100)
 
 
 class PyLibMCCache(BaseMemcachedCache):
@@ -114,27 +114,26 @@ class PyLibMCCache(BaseMemcachedCache):
     def set(self, key, value, timeout=None, version=None):
         key = self.make_key(key, version=version)
 
-        if len(value) > MAX_CHUNK_SIZE:
-            # Using MAX_CHUNK_SIZE in the key makes it so if MAX_CHUNK_SIZE
-            # changes in the future, all objects will be immediately
-            # invalid in the eyes of this module as it won't be able to
-            # reassemble the pieces
-            chunks_dict = dict(zip(
-                    ['%s-%s' % (key, x) 
-                        for x in range(0, len(value), MAX_CHUNK_SIZE)],
-                    [value[x:x+MAX_CHUNK_SIZE] 
-                        for x in range(0, len(value), MAX_CHUNK_SIZE)],
-                ))
-            chunks_dict[key] = '<<<django-pylibmc-chunker>>>-%s' % len(value)
-
         try:
-            if chunks_dict:
+            if len(value) > MAX_CHUNK_SIZE:
+                # Using MAX_CHUNK_SIZE in the key makes it so if MAX_CHUNK_SIZE
+                # changes in the future, all objects will be immediately
+                # invalid in the eyes of this module as it won't be able to
+                # reassemble the pieces
+                chunks_dict = dict(zip(
+                        ['%s-%s' % (key, x) 
+                            for x in range(0, len(value), MAX_CHUNK_SIZE)],
+                        [value[x:x+MAX_CHUNK_SIZE] 
+                            for x in range(0, len(value), MAX_CHUNK_SIZE)],
+                    ))
+                chunks_dict[key] = '<<<django-pylibmc-chunker>>>-%s' % len(value)
                 return self._cache.set_many(chunks_dict,
                     self._get_memcache_timeout(timeout))
             else:
                 return self._cache.set(key, value,
-                                       self._get_memcache_timeout(timeout),
-                                       MIN_COMPRESS)
+                   self._get_memcache_timeout(timeout),
+                   MIN_COMPRESS)
+            
         except pylibmc.ServerError:
             log.error('ServerError saving %s (%d bytes)' % (key, len(value)),
                       exc_info=True)
